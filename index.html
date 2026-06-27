@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Camera Messenger Style</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #000;
+  color: white;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: #111;
+}
+
+.container {
+  position: relative;
+  height: 60vh;
+  background: black;
+}
+
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: black;
+}
+
+.overlay {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+button {
+  padding: 12px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+}
+
+#captureBtn { background: red; color: white; }
+#switchBtn { background: #333; color: white; }
+#galleryBtn { background: #444; color: white; }
+
+.preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+}
+
+.item {
+  position: relative;
+}
+
+.item img {
+  width: 90px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: red;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.send {
+  width: 100%;
+  padding: 12px;
+  background: green;
+  color: white;
+  font-weight: bold;
+}
+
+.hidden { display: none; }
+
+#status {
+  font-size: 12px;
+  opacity: 0.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  <div>Messenger Camera</div>
+  <div id="status">idle</div>
+</div>
+
+<div class="container">
+  <video id="video" autoplay playsinline muted></video>
+
+  <div class="overlay">
+    <button id="switchBtn">🔄</button>
+    <button id="captureBtn">📸 Capture</button>
+    <button id="galleryBtn">🖼</button>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" multiple class="hidden"/>
+
+<canvas id="canvas" class="hidden"></canvas>
+
+<div class="preview" id="preview"></div>
+
+<button class="send" onclick="send()">🚀 Send</button>
+
+<script>
+let stream = null;
+let facingMode = "environment";
+let cameraStarted = false;
+let images = [];
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const preview = document.getElementById("preview");
+const status = document.getElementById("status");
+
+/* =========================
+   CAMERA START (on demand)
+========================= */
+async function startCamera() {
+  try {
+    status.innerText = "requesting camera...";
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Camera not supported");
+    }
+
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: facingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    cameraStarted = true;
+    status.innerText = "camera ON";
+  } catch (err) {
+    console.error(err);
+    status.innerText = "camera FAIL";
+    alert(err.message);
+  }
+}
+
+/* =========================
+   CAPTURE (auto open camera first)
+========================= */
+async function capture() {
+  if (!cameraStarted) {
+    await startCamera();
+  }
+
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  ctx.drawImage(video, 0, 0);
+
+  const img = canvas.toDataURL("image/jpeg", 0.75);
+
+  images.push({
+    id: Date.now(),
+    url: img
+  });
+
+  render();
+}
+
+/* =========================
+   SWITCH CAMERA
+========================= */
+async function switchCamera() {
+  facingMode = facingMode === "environment" ? "user" : "environment";
+
+  if (cameraStarted) {
+    await startCamera();
+  }
+}
+
+/* =========================
+   GALLERY
+========================= */
+document.getElementById("fileInput").addEventListener("change", (e) => {
+  for (let f of e.target.files) {
+    const url = URL.createObjectURL(f);
+    images.push({ id: Date.now() + Math.random(), url });
+  }
+  render();
+});
+
+function openGallery() {
+  document.getElementById("fileInput").click();
+}
+
+/* =========================
+   REMOVE IMAGE
+========================= */
+function remove(id) {
+  images = images.filter(x => x.id !== id);
+  render();
+}
+
+/* =========================
+   RENDER PREVIEW
+========================= */
+function render() {
+  preview.innerHTML = "";
+
+  images.forEach(img => {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    div.innerHTML = `
+      <img src="${img.url}" />
+      <button class="remove" onclick="remove(${img.id})">×</button>
+    `;
+
+    preview.appendChild(div);
+  });
+}
+
+/* =========================
+   SEND (mock)
+========================= */
+function send() {
+  if (!images.length) {
+    alert("No images");
+    return;
+  }
+
+  console.log("SEND PAYLOAD:", images);
+
+  alert("Sent " + images.length + " images");
+
+  images = [];
+  render();
+}
+
+/* =========================
+   EVENTS
+========================= */
+document.getElementById("captureBtn").onclick = capture;
+document.getElementById("switchBtn").onclick = switchCamera;
+document.getElementById("galleryBtn").onclick = openGallery;
+</script>
+
+</body>
+</html>
