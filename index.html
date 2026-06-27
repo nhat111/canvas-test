@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Production Camera</title>
+
+<style>
+body { margin:0; font-family: Arial; background:#000; color:#fff; }
+
+.topbar {
+  display:flex;
+  justify-content:space-between;
+  padding:10px;
+  background:#111;
+}
+
+.container {
+  position:relative;
+  height:60vh;
+  background:black;
+}
+
+video {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:black;
+}
+
+.overlay {
+  position:absolute;
+  bottom:10px;
+  left:0;
+  right:0;
+  display:flex;
+  justify-content:center;
+  gap:15px;
+}
+
+button {
+  padding:12px;
+  border:none;
+  border-radius:50px;
+  cursor:pointer;
+}
+
+#capture { background:red; color:white; }
+#switch { background:#333; color:white; }
+#gallery { background:#444; color:white; }
+
+.preview {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:10px;
+}
+
+.item {
+  position:relative;
+}
+
+.item img {
+  width:90px;
+  height:90px;
+  object-fit:cover;
+  border-radius:10px;
+}
+
+.remove {
+  position:absolute;
+  top:-5px;
+  right:-5px;
+  background:red;
+  border:none;
+  color:white;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+}
+
+.send {
+  width:100%;
+  padding:12px;
+  background:green;
+  color:white;
+  font-weight:bold;
+}
+
+.hidden { display:none; }
+
+#status {
+  font-size:12px;
+  opacity:0.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  <div>Camera Pro</div>
+  <div id="status">init...</div>
+</div>
+
+<div class="container">
+  <video id="video" autoplay playsinline muted></video>
+
+  <div class="overlay">
+    <button id="switch">🔄</button>
+    <button id="capture">📸</button>
+    <button id="gallery">🖼</button>
+  </div>
+</div>
+
+<input type="file" id="file" accept="image/*" multiple class="hidden"/>
+
+<canvas id="canvas" class="hidden"></canvas>
+
+<div class="preview" id="preview"></div>
+
+<button class="send" id="send">🚀 SEND</button>
+
+<script>
+let stream = null;
+let facingMode = "environment";
+let images = [];
+
+const video = document.getElementById("video");
+const status = document.getElementById("status");
+const canvas = document.getElementById("canvas");
+const preview = document.getElementById("preview");
+
+async function initCamera() {
+  try {
+    status.innerText = "requesting permission...";
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Camera API not supported");
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: facingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    video.srcObject = stream;
+
+    await video.play();
+
+    status.innerText = "camera ON";
+  } catch (err) {
+    console.error(err);
+    status.innerText = "camera FAIL";
+
+    fallbackToFile();
+  }
+}
+
+function fallbackToFile() {
+  alert("Camera not available → fallback to gallery mode");
+}
+
+function switchCamera() {
+  facingMode = facingMode === "environment" ? "user" : "environment";
+  initCamera();
+}
+
+/* 🔥 compress image (IMPORTANT production) */
+function compressImage(canvas, quality = 0.7) {
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function capture() {
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  ctx.drawImage(video, 0, 0);
+
+  const img = compressImage(canvas, 0.75);
+
+  images.push({ id: Date.now(), url: img });
+
+  render();
+}
+
+function openGallery() {
+  document.getElementById("file").click();
+}
+
+document.getElementById("file").addEventListener("change", (e) => {
+  for (let f of e.target.files) {
+    const url = URL.createObjectURL(f);
+    images.push({ id: Date.now() + Math.random(), url });
+  }
+  render();
+});
+
+function remove(id) {
+  images = images.filter(x => x.id !== id);
+  render();
+}
+
+function render() {
+  preview.innerHTML = "";
+
+  images.forEach(img => {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    div.innerHTML = `
+      <img src="${img.url}" />
+      <button class="remove" onclick="remove(${img.id})">×</button>
+    `;
+
+    preview.appendChild(div);
+  });
+}
+
+function send() {
+  if (!images.length) return alert("No images");
+
+  console.log("UPLOAD PAYLOAD:", images);
+
+  alert("Sent " + images.length + " images");
+
+  images = [];
+  render();
+}
+
+/* EVENTS */
+document.getElementById("switch").onclick = switchCamera;
+document.getElementById("capture").onclick = capture;
+document.getElementById("gallery").onclick = openGallery;
+document.getElementById("send").onclick = send;
+
+/* INIT */
+initCamera();
+</script>
+
+</body>
+</html>
