@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Messenger Camera Demo</title>
+<style>
+body{margin:0;font-family:Arial;background:#111;color:#fff}
+.toolbar{padding:12px;display:flex;gap:10px;background:#222}
+button{padding:10px 14px;border:none;border-radius:8px;cursor:pointer}
+#cameraModal{position:fixed;inset:0;background:#000;display:none;z-index:10}
+#cameraModal.show{display:block}
+video{width:100%;height:100%;object-fit:cover}
+.controls{position:absolute;bottom:24px;left:0;right:0;display:flex;justify-content:center;gap:16px}
+.preview{display:flex;overflow-x:auto;gap:10px;padding:10px;background:#1b1b1b}
+.item{position:relative;flex:0 0 auto}
+.item img{width:90px;height:90px;object-fit:cover;border-radius:8px}
+.remove{position:absolute;top:-6px;right:-6px;border-radius:50%;background:red;color:#fff}
+.send{margin:12px;width:calc(100% - 24px);background:green;color:#fff}
+</style>
+</head>
+<body>
+<div class="toolbar">
+<button id="cameraBtn">📷 Camera</button>
+<button id="galleryBtn">🖼 Gallery</button>
+<input id="fileInput" type="file" accept="image/*" multiple hidden>
+</div>
+
+<div id="cameraModal">
+<video id="video" autoplay playsinline muted></video>
+<div class="controls">
+<button id="closeBtn">✕</button>
+<button id="shutterBtn">⚪</button>
+<button id="switchBtn">🔄</button>
+</div>
+</div>
+
+<canvas id="canvas" hidden></canvas>
+<div id="preview" class="preview"></div>
+<button class="send" onclick="sendImages()">🚀 Send</button>
+
+<script>
+let stream=null,facingMode="environment",images=[];
+const modal=document.getElementById("cameraModal");
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const preview=document.getElementById("preview");
+
+async function startCamera(){
+ if(stream) stopCamera(false);
+ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode}});
+ video.srcObject=stream;
+ await video.play();
+ modal.classList.add("show");
+}
+function stopCamera(hide=true){
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+ video.srcObject=null;
+ if(hide) modal.classList.remove("show");
+}
+async function switchCamera(){facingMode=facingMode==="environment"?"user":"environment";if(modal.classList.contains("show")) await startCamera();}
+function render(){
+ preview.innerHTML="";
+ images.forEach(img=>{
+   const d=document.createElement("div"); d.className="item";
+   d.innerHTML=`<img src="${img.url}"><button class="remove">×</button>`;
+   d.querySelector("button").onclick=()=>{if(img.objectUrl) URL.revokeObjectURL(img.url); images=images.filter(x=>x.id!==img.id); render();};
+   preview.appendChild(d);
+ });
+}
+document.getElementById("cameraBtn").onclick=()=>startCamera().catch(e=>alert(e.message));
+document.getElementById("closeBtn").onclick=()=>stopCamera();
+document.getElementById("switchBtn").onclick=()=>switchCamera();
+document.getElementById("shutterBtn").onclick=()=>{
+ const ctx=canvas.getContext("2d");
+ canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+ ctx.drawImage(video,0,0);
+ images.push({id:Date.now(),url:canvas.toDataURL("image/jpeg",0.8)});
+ render();
+ stopCamera();
+};
+document.getElementById("galleryBtn").onclick=()=>fileInput.click();
+fileInput.onchange=e=>{
+ [...e.target.files].forEach(f=>images.push({id:Date.now()+Math.random(),url:URL.createObjectURL(f),objectUrl:true}));
+ render(); fileInput.value="";
+};
+function sendImages(){alert("Send "+images.length+" image(s). Check console.");console.log(images);}
+</script>
+</body>
+</html>
